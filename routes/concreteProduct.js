@@ -1,15 +1,15 @@
-const express = require('express');
+const router = require('express').Router();
+
 const Product = require('../models/Product')
 const ConcreteProduct = require('../models/ConcreteProduct');
 const Store = require('../models/Store');
 
-const router = express.Router();
 
 // Get back all posts
 // Parameter: id
 // Parameter: storeId, category, page
 // Parameter: productId, page
-router.get('/', async (req, res) => {
+router.get('/',async (req, res) => {
     try{
         const id = req.query.id;
         const storeId = req.query.storeId;
@@ -64,18 +64,20 @@ router.get('/', async (req, res) => {
 })
 
 // Input ConcreteProducts
+// Image must be uploaded as a multipart form
 // Parameter: productId, price, storeId
 router.post('/', async(req, res) => {
     try{
-        productId = req.query.productId;
-        price = req.query.price;
-        storeId = req.query.storeId;
+        productId = req.body.productId;
+        price = req.body.price;
+        storeId = req.body.storeId;
         if(productId !== undefined && price !== undefined && storeId !== undefined){
             const product = await Product.findById(productId);
             const store = await Store.findById(storeId);
             const concreteProduct = ConcreteProduct({
                 productId: product._id,
                 name: product.name,
+                img: product.img,
                 author: product.author,
                 price: price,
                 category: product.category,

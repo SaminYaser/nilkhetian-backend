@@ -1,13 +1,22 @@
 const router = require('express').Router();
+const path = require('path');
 const bcrypt = require('bcryptjs');
 const { isRef } = require('joi');
 const jwt = require('jsonwebtoken');
+const pdf = require('html-pdf');
+const ejs = require('ejs');
+const pdfMake = require('pdfMake');
 const rateLimit = require('express-rate-limit');
+
 const { create } = require('../models/User');
 const User = require('../models/User');
+
 const auth = require('./verifyToken').auth;
-const {registrationValidation, loginValidation} = require('../validation');
+const {registrationValidation, loginValidation} = require('../modules/validation');
 const {createTokens, deleteTokens} = require('./tokens');
+const pdfTemplate = require('../documents/pdfTemplate');
+const { send } = require('process');
+const sendMail = require('../modules/mailer').sendMail;
 
 // middleware
 const minuteLimiter = rateLimit({
@@ -16,16 +25,57 @@ const minuteLimiter = rateLimit({
     skipFailedRequests: true
 })
 
+// Fonts
+var fonts = {
+    Roboto: {
+      normal: 'fonts/Roboto-Regular.ttf',
+      bold: 'fonts/Roboto-Medium.ttf',
+      italics: 'fonts/Roboto-Italic.ttf',
+      bolditalics: 'fonts/Roboto-MediumItalic.ttf'
+    }
+  };
+
+const frontendUrl = 'http://localhost:3000/';
+
+// Dummy Data
+const students = [
+  {name: "Joy",
+   email: "joy@example.com",
+   city: "New York",
+   country: "USA"},
+  {name: "John",
+   email: "John@example.com",
+   city: "San Francisco",
+   country: "USA"},
+  {name: "Clark",
+   email: "Clark@example.com",
+   city: "Seattle",
+   country: "USA"},
+  {name: "Watson",
+   email: "Watson@example.com",
+   city: "Boston",
+   country: "USA"},
+  {name: "Tony",
+   email: "Tony@example.com",
+   city: "Los Angels",
+   country: "USA"
+}];
 
 // Route: /user
-// router.get('/', async (req, res) => {
-//     try{
-//         const users = await User.find();
-//         res.json(users);
-//     } catch(err) {
-//         res.status(400).send(err);
-//     }
-// })
+// Debug Function.
+router.get('/', async (req, res) => {
+    try{
+        send.status(404).send("Not Found");
+        // sendMail(
+        //     to='saminyaser.24csedu.016@gmail.com',
+        //     subject='Nilkhetian Order Mail'
+        // );
+        // res.send("Working");
+    } catch(err) {
+        console.log(err)
+        return res.status(400).send(err);
+    }
+})
 
 router.get('/confirmation/:token', async (req, res) => {
     try{
@@ -44,12 +94,17 @@ router.get('/confirmation/:token', async (req, res) => {
     
 })
 
-router.post('/resendconfirmation', minuteLimiter, auth, (req, res) => {
-    console.log('Email JWT Token: ' + 
-            jwt.sign({ id: req.user.id },
-                process.env.EMAIL_TOKEN_SECRET,
-                { expiresIn: '7d' }
-            ));
+router.post('/resendconfirmation', minuteLimiter, auth, async (req, res) => {
+    const user = await User.findById(req.user.id);
+    const token = jwt.sign({ id: req.user.id },
+        process.env.EMAIL_TOKEN_SECRET,
+        { expiresIn: '7d' }
+    );
+    sendMail(
+        to=user.email,
+        subject='Nilkhetian Confirmation Mail',
+        html='Hello,<br> Please Click on the link to verify your email.<br><a href='+ frontendUrl + 'response/' + token + '>Click here to verify</a>'
+    );
     res.send('Email successfully sent');    
 })
 
@@ -61,40 +116,50 @@ router.post('/resetpassword', minuteLimiter, async (req, res) => {
     if(!user) return res.status(401).send('Invalid Email');
 
     const payload = {
-        id: user._id,
-        name: user.name
+        id: user._id
     };
     const secret = user.password + '-' + user.date;
 
     // Generate token from payload and secret
     const token = jwt.sign(payload, secret);
 
+    console.log(secret);
+    console.log(token);
+
     // send userId and token
-    res.send({
-        token: token
-    });
+    sendMail(
+        to=req.body.email,
+        subject='Nilkhtian Password Recovery Mail',
+        html='Hello,<br> Please Click to reset your password.<br><a href='+ frontendUrl + 'recoverpassword/' + token + '>Click here to reset password</a>'
+    );
+    res.send("Recovery mail sent");
 })
 
-router.get('/resetpassword/:token', async (req, res) => {
+router.post('/resetpassword/:token', async (req, res) => {
     try{
         const token = req.params.token;
         const newPassword = req.body.newPassword;
         const email = req.body.email;
+        if((token === undefined || token === null) || (newPassword === undefined || newPassword === null) || (email === undefined || email === null)){
+            res.status(400).send("Bad Request");
+        }
 
         const user = await User.findOne({email: email});
-        if(!user) return res.status(404).send("Page Not Found");
+        if(!user) return res.status(404).send("User Not Found");
 
-        var secret = user.password + '-' + user.date;
+        const secret = user.password + '-' + user.date;
         const verification = jwt.verify(token, secret);
+        if(!verification) res.status(404).send("Page Not Found");
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(newPassword, salt);
-        const check = await User.findByIdAndUpdate(verification.id, {'password': hashedPassword}, (err, result) => {
+        await User.findByIdAndUpdate(verification.id, {'password': hashedPassword}, (err, result) => {
             if(err)
                 res.status(404).send("Page Not Found");
             else if(result)
                 res.send("Password updated successfully");
         })
     } catch (err) {
+        console.log(err);
         res.send(err);
     }
 })
@@ -123,6 +188,15 @@ router.post('/register', async (req, res) => {
     })
     try {
         const savedUser = await user.save();
+        const token = jwt.sign({ id: savedUser._id },
+            process.env.EMAIL_TOKEN_SECRET,
+            { expiresIn: '7d' }
+        );
+        sendMail(
+            to=savedUser.email,
+            subject='Nilkhetian Confirmation Mail',
+            html='Hello,<br> Please Click on the link to verify your email.<br><a href='+ frontendUrl + 'response/' + token + '>Click here to verify</a>'
+        );
         res.status(200).send("An e-mail has been sent to your e-mail address for verification\nPlease verify your e-mail to complete registration.");
         console.log('Email JWT Token: ' + 
             jwt.sign({ id: savedUser._id },
@@ -164,6 +238,33 @@ router.post('/logout', async (req, res) => {
     } catch {
         res.send("Error occured while logging out");
     }
+})
+
+router.patch('/', auth, async (req, res) => {
+    var setObject = {};
+    
+    // Fill default fields
+    setObject.phone = req.body.phone;
+    setObject.address = req.body.address;
+    
+    // Get user from database
+    const user = await User.findById(req.user.id);
+
+    // Password matching
+    const validPass = await bcrypt.compare(req.body.password, user.password);
+    if(!validPass) return res.status(400).send('Invalid Password');
+
+    // Hash new password if required
+    if(req.body.newPassword != null && req.body.newPassword != "")
+        setObject.password = await bcrypt.hash(req.body.newPassword, 10);
+    else
+        req.body.newPassword = null;
+    
+    // Update Profile
+    User.findByIdAndUpdate(req.user.id, { $set: setObject }, (err, result) => {
+        if(err) return res.status(502).send("Error occured");
+        res.send("Profile updated");
+    });
 })
 
 module.exports = router;

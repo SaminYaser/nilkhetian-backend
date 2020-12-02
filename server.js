@@ -13,22 +13,23 @@ app.use(bodyParser.json());
 // Import Routes
 const authRoute = require('./routes/auth');
 const tokenRoute = require('./routes/tokens').tokenRouter;
-const uploadRoute = require('./routes/fileUpload');
 const storesRoute = require('./routes/stores');
 const storeRoute = require('./routes/store');
 const productRoute = require('./routes/product');
 const concreteProductRoute = require('./routes/concreteProduct');
 const orderRoute = require('./routes/order');
+const homeCategroy = require('./routes/homeCategory')
 
 // Route Middlewares
 app.use('/stores', storesRoute);
 app.use('/store', storeRoute);
 app.use('/products', productRoute);
 app.use('/concrete-products', concreteProductRoute);
-app.use('/api/user', authRoute);
-app.use('/api/token', tokenRoute);
-app.use('/api/upload', uploadRoute);
+app.use('/user', authRoute);
+app.use('/token', tokenRoute);
 app.use('/order', orderRoute);
+app.use('/homeCategory', homeCategroy);
+// Public directory
 app.use('/img', express.static(path.join(__dirname, 'img')))
 
 // Routes

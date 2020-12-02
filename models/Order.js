@@ -1,8 +1,18 @@
 const mongoose = require('mongoose')
 
 const orderedProducts = mongoose.Schema({
-    concreteProductId: String,
-    quantity: String
+    concreteProductId: {
+        type: String,
+        required: true
+    },
+    price: {
+        type: Number,
+        required: true
+    },
+    quantity: {
+        type: String,
+        required: true
+    }
 }, {_id: false});
 
 const OrderSchema = mongoose.Schema({
@@ -15,7 +25,7 @@ const OrderSchema = mongoose.Schema({
         type: String,
         required: true
     },
-    shippingAdress: {
+    shippingAddress: {
         type: String,
         required: true
     },

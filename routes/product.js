@@ -1,7 +1,8 @@
-const express = require('express');
+const router = require('express').Router();
+
 const Product = require('../models/Product');
 
-const router = express.Router();
+const fileUpload = require('../modules/fileUpload');
 
 // Get category list
 // Get back all product /?category=blah
@@ -59,9 +60,10 @@ router.get('/', async (req, res) => {
     }
 })
 
-router.post('/', async(req, res) => {
+router.post('/', fileUpload.upload.any(), async(req, res) => {
     const product = new Product({
         name: req.body.name,
+        img: req.file.path,
         author: req.body.author,
         category: req.body.category
     });

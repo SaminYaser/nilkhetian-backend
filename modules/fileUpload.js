@@ -1,4 +1,3 @@
-const router = require('express').Router();
 var multer = require('multer');
 
 
@@ -19,16 +18,7 @@ const imageFilter = (req, file, cb) => {
     }
 };
 
+// req.file.path
 var upload = multer({storage: storage, fileFilter: imageFilter});
 
-// Save the path as image reference
-
-router.post('/single', upload.single('image'), (req, res) => {
-    try{
-        res.send({file: req.file, user: req.body.username});
-    }catch {
-        res.send(400)
-    }
-})
-
-module.exports = router;
+module.exports.upload = upload;
